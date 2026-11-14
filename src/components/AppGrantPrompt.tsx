@@ -10,6 +10,8 @@ import { EMAIL_SLUG } from "../../shared/email";
 import { BotAvatar } from "./Avatar";
 import { UndoToast } from "./bot-access/ShareBotButton";
 import { BotSwitch } from "./bot-panel/rows";
+import { Switch } from "./SettingsPrimitives";
+import { cn } from "@/lib/cn";
 
 let connectingFromBot: string | null = null;
 let notice: { slug: string; text: string } | null = null;
@@ -130,10 +132,34 @@ export function useAppGrants({ status, emailConnected, inventoryReady }: { statu
   return { canChange, appConnected, change: setChanging, dismiss, done, changing: canChange ? changing : null, bots };
 }
 
-export function AppGrantPrompt({ app, slug, bots, onDone, onDismiss }: {
+export interface DepartmentGroup {
+  /** Null for bots in no department (General). */
+  department: string | null;
+  bots: Bot[];
+}
+
+/** The sidebar's order: General first, then the departments as the sidebar lists them, then any it doesn't list. */
+export function botsByDepartment(bots: readonly Bot[], sections: readonly string[] = []): DepartmentGroup[] {
+  const groups = new Map<string | null, Bot[]>();
+  for (const bot of bots) {
+    const department = bot.section?.trim() || null;
+    groups.set(department, [...(groups.get(department) ?? []), bot]);
+  }
+  const rank = (department: string | null) => {
+    if (department === null) return -1;
+    const at = sections.indexOf(department);
+    return at === -1 ? sections.length : at;
+  };
+  return [...groups.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b) || (a ?? "").localeCompare(b ?? ""))
+    .map(([department, members]) => ({ department, bots: members }));
+}
+
+export function AppGrantPrompt({ app, slug, bots, sections, onDone, onDismiss }: {
   app: string;
   slug: string;
   bots: Bot[];
+  sections?: readonly string[];
   onDone: (on: ReadonlySet<string>) => void;
   onDismiss: () => void;
 }) {
@@ -177,6 +203,25 @@ export function AppGrantPrompt({ app, slug, bots, onDone, onDismiss }: {
     if (!next.delete(botId)) next.add(botId);
     return next;
   });
+  /** All on turns the department off; anything less turns all of it on. */
+  const toggleDepartment = (members: readonly Bot[]) => setOn((current) => {
+    const next = new Set(current);
+    const allOn = members.every((bot) => current.has(bot.id));
+    for (const bot of members) {
+      if (allOn) next.delete(bot.id);
+      else next.add(bot.id);
+    }
+    return next;
+  });
+  const groups = botsByDepartment(bots, sections);
+  const grouped = groups.some((group) => group.department !== null);
+  const botRow = (bot: Bot) => (
+    <div key={bot.id} className={cn("flex min-h-11 items-center gap-2.5", grouped && "ps-2")}>
+      <BotAvatar bot={bot} size={24} animated={false} />
+      <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">{bot.name}</span>
+      <BotSwitch color={bot.color} checked={on.has(bot.id)} aria-label={t("botSettings.simple.appToggle", { name: bot.name, app })} onClick={() => toggle(bot.id)} />
+    </div>
+  );
 
   return (
     <div
@@ -199,13 +244,20 @@ export function AppGrantPrompt({ app, slug, bots, onDone, onDismiss }: {
           </button>
         </div>
         <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
-          {bots.map((bot) => (
-            <div key={bot.id} className="flex min-h-11 items-center gap-2.5">
-              <BotAvatar bot={bot} size={24} animated={false} />
-              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">{bot.name}</span>
-              <BotSwitch color={bot.color} checked={on.has(bot.id)} aria-label={t("botSettings.simple.appToggle", { name: bot.name, app })} onClick={() => toggle(bot.id)} />
-            </div>
-          ))}
+          {grouped ? groups.map((group) => {
+            const name = group.department ?? t("automations.generalDepartment");
+            const using = group.bots.filter((bot) => on.has(bot.id)).length;
+            return (
+              <section key={group.department ?? ""} aria-label={name} data-app-grant-department={name} className="border-t border-hairline/30 py-1 first:border-t-0">
+                <div className="flex min-h-10 items-center gap-2.5">
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">{name}</span>
+                  <span className="shrink-0 text-[12px] text-ink-tertiary">{t("apps.departmentCount", { on: using, total: group.bots.length })}</span>
+                  <Switch checked={using === group.bots.length} aria-label={t("apps.departmentToggle", { department: name, app })} onClick={() => toggleDepartment(group.bots)} />
+                </div>
+                {group.bots.map(botRow)}
+              </section>
+            );
+          }) : bots.map(botRow)}
         </div>
         <div className="mt-4 flex justify-end">
           <button type="button" onClick={() => onDone(on)} className="rounded-xl bg-accent px-4 py-2 text-[13px] font-medium text-white hover:brightness-110">

@@ -346,3 +346,57 @@ describe("on a Team Cloud", () => {
     expect(switchOf("Scout")).not.toBeNull();
   });
 });
+
+describe("choosing bots by department", () => {
+  const team = () => [
+    bot("scout", { section: "Sales" }),
+    bot("ada", { section: "Sales", connectorScopes: { apps: { apollo: "write" } } }),
+    bot("rex", { section: "Research" }),
+    bot("moss"),
+  ];
+  const departmentSwitch = (name: string) => prompt()!.querySelector<HTMLElement>(`[aria-label="Everyone in ${name} can use Apollo"]`)!;
+  const departments = () => Array.from(prompt()!.querySelectorAll("[data-app-grant-department]")).map((section) => section.getAttribute("data-app-grant-department"));
+
+  it("groups the bots General first, then in the sidebar's order, with how many each department has on", async () => {
+    fixture.state.bots = team().map((one) => (one.id === "ada" ? one : { ...one, composio: false }));
+    (fixture.state as { sections?: string[] }).sections = ["Research", "Sales"];
+    fixture.services = { apollo: { connected: true, accounts: [{ id: "ca_old", status: "ACTIVE" }] } };
+    await open();
+    await click(button(tile(), "Which bots can use Apollo?"));
+    expect(departments()).toEqual(["General", "Research", "Sales"]);
+    const sales = prompt()!.querySelector<HTMLElement>('[data-app-grant-department="Sales"]')!;
+    expect(sales.textContent).toContain("1 of 2");
+    expect(departmentSwitch("Sales").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("turns a whole department on with one switch, then off again, and writes only what changed", async () => {
+    fixture.state.bots = team().map((one) => (one.id === "ada" ? one : { ...one, composio: false }));
+    (fixture.state as { sections?: string[] }).sections = ["Sales", "Research"];
+    fixture.services = { apollo: { connected: true, accounts: [{ id: "ca_old", status: "ACTIVE" }] } };
+    await open();
+    await click(button(tile(), "Which bots can use Apollo?"));
+    await click(departmentSwitch("Sales"));
+    expect(switchOf("Scout").getAttribute("aria-checked")).toBe("true");
+    expect(switchOf("Ada").getAttribute("aria-checked")).toBe("true");
+    expect(departmentSwitch("Sales").getAttribute("aria-checked")).toBe("true");
+    expect(switchOf("Rex").getAttribute("aria-checked")).toBe("false");
+    await click(button(prompt()!, "Done"));
+    expect(writes().map((action) => action.botId)).toEqual(["scout"]);
+
+    fixture.dispatch.mockClear();
+    await click(button(tile(), "Which bots can use Apollo?"));
+    await click(departmentSwitch("Sales"));
+    await click(departmentSwitch("Sales"));
+    expect(switchOf("Scout").getAttribute("aria-checked")).toBe("false");
+    expect(switchOf("Ada").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("stays one plain list when no bot is in a department", async () => {
+    fixture.state.bots = [bot("scout"), bot("ada")];
+    fixture.services = { apollo: { connected: true, accounts: [{ id: "ca_old", status: "ACTIVE" }] } };
+    await open();
+    await click(button(tile(), "Which bots can use Apollo?"));
+    expect(departments()).toEqual([]);
+    expect(switchOf("Scout")).toBeTruthy();
+  });
+});
