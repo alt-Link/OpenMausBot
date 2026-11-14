@@ -741,6 +741,7 @@ export function PluginsPanel() {
             app={cards?.find((card) => card.slug === appGrants.changing)?.label ?? appGrants.changing}
             slug={appGrants.changing}
             bots={appGrants.bots}
+            sections={state.sections}
             onDone={appGrants.done}
             onDismiss={appGrants.dismiss}
           />
