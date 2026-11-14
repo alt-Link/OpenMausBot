@@ -23,6 +23,7 @@ import {
   Smartphone,
   UserRound,
   UsersRound,
+  Workflow,
   Zap,
 } from "lucide-react";
 
@@ -307,10 +308,11 @@ export function phoneDevicesItem(state: PhonePlaceState, place: string, onSelect
   };
 }
 
-export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, onTeamMap, onFiles, onPublishedApps, archived }: {
+export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, onPipelines, onTeamMap, onFiles, onPublishedApps, archived }: {
   activeView: string;
   automationsNeedYou: boolean;
   onAutomations: () => void;
+  onPipelines?: () => void;
   onTeamMap: () => void;
   /** set once My Cloud's files are ready to open */
   onFiles?: () => void;
@@ -319,6 +321,7 @@ export function toolMenuItems({ activeView, automationsNeedYou, onAutomations, o
 }): SidebarMenuItem[] {
   return [
     { key: "automations", label: t("sidebar.nav.automations"), icon: <Zap size={16} />, active: activeView === "routines", attention: automationsNeedYou, onSelect: onAutomations },
+    ...(onPipelines ? [{ key: "pipelines", label: t("sidebar.nav.pipelines"), icon: <Workflow size={16} />, active: activeView === "pipelines", onSelect: onPipelines }] : []),
     { key: "team-map", label: t("sidebar.nav.teamMap"), icon: <UsersRound size={16} />, active: activeView === "team-map", onSelect: onTeamMap },
     ...(onFiles ? [{ key: "files", label: t("sidebar.nav.files"), icon: <FolderOpen size={16} />, active: activeView === "files", onSelect: onFiles }] : []),
     ...(onPublishedApps ? [{ key: "published-apps", label: t("sidebar.nav.publishedApps"), icon: <Rocket size={16} />, active: activeView === "published-apps", onSelect: onPublishedApps }] : []),
@@ -589,6 +592,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         activeView: state.activeView,
         automationsNeedYou: account?.automationsNeedYou ?? automationsNeedYou,
         onAutomations: () => dispatch({ type: "showRoutines", view: "list" }),
+        onPipelines: () => dispatch({ type: "showPipelines" }),
         onTeamMap: () => dispatch({ type: "showTeamMap" }),
         onFiles: filesReady ? () => dispatch({ type: "showFiles" }) : undefined,
         onPublishedApps: () => dispatch({ type: "showPublishedApps" }),
